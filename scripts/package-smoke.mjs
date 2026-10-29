@@ -42,7 +42,7 @@ try {
     'package.json', 'bin/switchboard.mjs', 'README.md', 'LICENSE', 'NOTICE',
     'THIRD_PARTY_NOTICES.md', 'CONTRIBUTING.md', 'SECURITY.md', 'CHANGELOG.md',
     'docs/routing.md', 'docs/customization.md', 'docs/privacy.md', 'docs/native-cli.md', 'docs/model-catalog.md',
-    'docs/classifiers.md', 'docs/distribution.md', 'docs/t3.md',
+    'docs/classifiers.md', 'docs/distribution.md', 'docs/t3.md', 'docs/native-workers.md',
   ]);
   for (const file of files) {
     assert.ok(publicFiles.has(file) || /^dist\/(?:[a-z0-9-]+\/)*[a-z0-9-]+\.(?:js|d\.ts)$/.test(file),
@@ -68,6 +68,9 @@ try {
   const workerPolicy = JSON.parse(run(installed, ['t3', 'policy']));
   assert.equal(workerPolicy.routing.codex.routine.model, 'gpt-6-luna');
   run(installed, ['t3', 'init']);
+  run(installed, ['workers', 'init']);
+  assert.match(await readFile(join(scratch, '.codex', 'agents', 'switchboard_routine.toml'), 'utf8'), /gpt-6-luna/);
+  assert.match(await readFile(join(scratch, '.claude', 'agents', 'switchboard-routine.md'), 'utf8'), /claude-haiku-5-5/);
   const instructions = await readFile(join(scratch, 'AGENTS.md'), 'utf8');
   assert.ok(instructions.includes(installed), 'Project instructions must use the installed executable.');
   const routed = spawnSync(installed, ['t3', 'route'], {
@@ -82,6 +85,10 @@ try {
   assert.equal(JSON.parse(routed.stdout).delegation.target.model, 'gpt-6-luna');
   assert.match(JSON.parse(routed.stdout).delegation.task, /^SWITCHBOARD_WORKER\n/);
   run(installed, ['t3', 'init', '--global']);
+  run(installed, ['workers', 'init', '--global']);
+  assert.equal(JSON.parse(run(installed, ['workers', 'status', '--global'])).installed, true);
+  assert.match(await readFile(join(env.HOME, '.codex', 'agents', 'switchboard_routine.toml'), 'utf8'), /gpt-6-luna/);
+  run(installed, ['workers', 'uninstall', '--global']);
   assert.equal(JSON.parse(run(installed, ['t3', 'status', '--global'])).installed, true);
   assert.ok((await readFile(join(env.HOME, '.codex', 'AGENTS.md'), 'utf8')).includes('t3-instructions.md'));
   assert.ok((await readFile(join(env.HOME, '.claude', 'CLAUDE.md'), 'utf8')).includes('t3-instructions.md'));

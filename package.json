@@ -21,6 +21,7 @@
     "docs/customization.md",
     "docs/privacy.md",
     "docs/native-cli.md",
+    "docs/native-workers.md",
     "docs/model-catalog.md",
     "docs/classifiers.md",
     "docs/distribution.md",

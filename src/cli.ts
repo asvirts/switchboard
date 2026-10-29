@@ -23,6 +23,7 @@ import type { InteractiveContext } from './interactive.ts';
 import { describeChanges, effectivePolicy, getPath, parsePath, parseValue, readOverride, saveOverride, setPath, unsetPath } from './policy-edit.ts';
 import { PromptCancelled, interactive, terminalPrompter } from './prompts.ts';
 import { t3Command } from './t3/cli.ts';
+import { workersCommand } from './cli-workers/cli.ts';
 
 const help = `Switchboard — automatic model and effort routing
 
@@ -32,6 +33,9 @@ Usage:
   switchboard t3 status --global | uninstall --global
   switchboard t3 instructions | policy
   switchboard t3 route          (JSON request on stdin; returns delegate_task arguments)
+  switchboard workers init      (install native CLI worker routing in this project)
+  switchboard workers init --global  (enable native workers across projects)
+  switchboard workers status --global | uninstall --global
   switchboard init [--yes]
   switchboard config            (interactive settings menu)
   switchboard config show | check
@@ -344,6 +348,7 @@ export async function main(args: string[]): Promise<number> {
     const [command, ...rest] = args;
     const root = stateDirectory();
     if (command === 't3') return await t3Command(root, rest);
+    if (command === 'workers') return await workersCommand(root, rest);
     if (command === 'claude' || command === 'codex') return await launch(root, command, rest);
     if (command === 'init') return await init(root, rest);
     if (command === 'doctor' && (!rest.length || (rest.length === 1 && rest[0] === '--fix'))) return await doctor(root, rest[0] === '--fix');

@@ -45,8 +45,7 @@ sandboxing, approvals, and worker execution.
 
 ## Get started
 
-You need Node.js 22.18 or newer on macOS or Linux and T3 Code with an available
-Codex or Claude provider. Clone and build this checkout:
+You need Node.js 22.18 or newer on macOS or Linux. Clone and build this checkout:
 
 ```sh
 git clone https://github.com/asvirts/switchboard.git
@@ -55,8 +54,10 @@ npm ci
 npm run build
 ```
 
-To enable routing for T3 projects on this machine, run the built checkout using
-its actual absolute path:
+### T3 Code
+
+With T3 Code and an available Codex or Claude provider, enable routing across
+projects on this machine by running the built checkout using its actual absolute path:
 
 ```sh
 node /absolute/path/to/switchboard/bin/switchboard.mjs t3 init --global
@@ -72,6 +73,46 @@ To enable routing only for one project instead, run the same command without
 `--global` from that project's directory. The [T3 guide](docs/t3.md) covers
 global status, removal, custom provider homes, and the limits of instruction-based
 worker safeguards.
+
+### Claude Code and Codex CLIs
+
+To enable native worker routing across repositories, run this once from any
+directory, using the actual absolute path to your built checkout:
+
+```sh
+node /absolute/path/to/switchboard/bin/switchboard.mjs workers init --global
+```
+
+Start a new `claude` or `codex` session in any project. Setup adds user-level
+worker definitions and managed instructions for both CLIs, while preserving
+existing settings and unrelated instructions. It uses `~/.codex` and `~/.claude`
+by default; if you use `CODEX_HOME` or `CLAUDE_CONFIG_DIR`, use the same values
+for setup and for the CLIs. Codex's native multi-agent feature must be available
+and enabled; setup does not change its configuration.
+
+Inspect the saved global setup or remove it with:
+
+```sh
+node /absolute/path/to/switchboard/bin/switchboard.mjs workers status --global
+node /absolute/path/to/switchboard/bin/switchboard.mjs workers uninstall --global
+```
+
+Status checks saved files, not live worker execution or model access. Uninstall
+preserves and reports edited worker files and managed blocks. Project instructions
+and same-named project agents may take precedence over the global setup.
+
+To enable native workers for only one project instead, run:
+
+```sh
+cd /path/to/your/project
+node /absolute/path/to/switchboard/bin/switchboard.mjs workers init
+```
+
+The primary chooses a named native subagent; the CLI executes it within its own
+provider. Routing is instruction-driven and cannot guarantee delegation or model
+availability. See [native worker setup](docs/native-workers.md) for policy and
+limitations. This is separate from T3 setup and the classifier-based
+`switchboard claude` and `switchboard codex` proxy.
 
 The upstream npm package does not include this fork's T3 workflow. See the
 [T3 guide](docs/t3.md) for policy configuration, routing details, and privacy.
