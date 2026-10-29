@@ -93,6 +93,51 @@ test('Vercel disables retries and never includes provider error bodies in diagno
   assert.equal(calls, 1);
 });
 
+test('Vercel discards an unbounded error response and preserves the HTTP status', async t => {
+  let pulls = 0;
+  let cancelled = false;
+  t.mock.method(globalThis, 'fetch', async () => new Response(new ReadableStream<Uint8Array>({
+    pull(controller) { pulls++; controller.enqueue(new TextEncoder().encode('gateway-secret private-task')); },
+    cancel() { cancelled = true; },
+  }), { status: 503 }));
+  await assert.rejects(createVercelJevClassifier('gateway-secret')('private-task', new AbortController().signal, context),
+    /^Error: Vercel AI Gateway Jev request failed \(HTTP 503\)$/);
+  assert.equal(cancelled, true);
+  assert.ok(pulls <= 1, `Error body was consumed: ${pulls} chunks`);
+});
+
+test('Vercel stops reading and cancels an oversized streamed success response without exposing its content', async t => {
+  let pulls = 0;
+  let cancelled = false;
+  t.mock.method(globalThis, 'fetch', async () => new Response(new ReadableStream<Uint8Array>({
+    pull(controller) {
+      pulls++;
+      controller.enqueue(new TextEncoder().encode('private-task'.repeat(10_000)));
+    },
+    cancel() { cancelled = true; },
+  })));
+  await assert.rejects(createVercelJevClassifier('gateway-secret')('private-task', new AbortController().signal, context),
+    /^Error: Vercel AI Gateway Jev classification failed$/);
+  assert.equal(cancelled, true);
+  assert.ok(pulls <= 4, `Response was not stopped promptly: ${pulls} chunks`);
+});
+
+test('Vercel cancellation during response reading remains private', async t => {
+  const controller = new AbortController();
+  let reading!: () => void;
+  const started = new Promise<void>(resolve => { reading = resolve; });
+  t.mock.method(globalThis, 'fetch', async (_url: string, options: RequestInit) => new Response(new ReadableStream<Uint8Array>({
+    start(stream) {
+      options.signal!.addEventListener('abort', () => stream.error(options.signal!.reason), { once: true });
+      reading();
+    },
+  })));
+  const pending = createVercelJevClassifier('key')('task', controller.signal, context);
+  await started;
+  controller.abort(new Error('private-cancellation-reason'));
+  await assert.rejects(pending, /^Error: Vercel AI Gateway Jev classification failed$/);
+});
+
 test('Vercel propagates cancellation to the transport', async t => {
   const controller = new AbortController();
   let reachedTransport!: () => void;

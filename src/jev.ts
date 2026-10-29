@@ -17,6 +17,7 @@ export interface JevClient {
 const SDK_ATTEMPT_TIMEOUT_MS = 31_000;
 export const TYPESAFE_BASE_URL = 'https://api.typesafe.ai';
 export const VERCEL_BASE_URL = 'https://ai-gateway.vercel.sh/v4/ai';
+const MAX_GATEWAY_RESPONSE_BYTES = 256 * 1024;
 
 export function typesafeModel(env: NodeJS.ProcessEnv = process.env): string {
   return env.SWITCHBOARD_MODEL?.trim() || env.TYPESAFE_DEFAULT_MODEL?.trim() || 'jev-latest';
@@ -57,8 +58,32 @@ function record(value: unknown): Record<string, unknown> | undefined {
 // validates critical shapes and parseJevAnswers validates choices/confidence.
 const gatewayDiagnosticFetch: typeof fetch = async (input, init) => {
   const response = await globalThis.fetch(input, init);
-  if (!response.ok) return response;
-  const body: unknown = await response.json();
+  if (!response.ok) {
+    // The SDK otherwise reads an error body without a limit. Only the status is
+    // used in our diagnostic, so discard provider content before it reaches it.
+    void response.body?.cancel().catch(() => {});
+    return new Response(null, { status: response.status });
+  }
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('Empty Gateway response');
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_GATEWAY_RESPONSE_BYTES) throw new Error('Gateway response too large');
+      chunks.push(value);
+    }
+  } catch (error) {
+    // Do not wait on a provider-controlled stream's cancellation callback.
+    void reader.cancel().catch(() => {});
+    throw error;
+  } finally {
+    reader.releaseLock();
+  }
+  const body: unknown = JSON.parse(new TextDecoder().decode(Buffer.concat(chunks)));
   const answers = record(record(body)?.answers);
   if (answers) {
     for (const [id, value] of Object.entries(answers)) {

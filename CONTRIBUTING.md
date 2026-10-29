@@ -53,6 +53,9 @@ need `.env.local` or make paid AI requests. The package smoke check may download
 public npm dependencies. It verifies the compiled archive independently of the
 source checkout.
 
+CI also checks production dependencies with `npm audit --omit=dev`; this
+requires access to the npm registry and fails when advisories are reported.
+
 Live model tests require explicit authorization. Use synthetic tasks in an
 isolated scratch directory and only test models your account can access.
 T3 worker runs consume provider quota; legacy proxy tests can also consume
