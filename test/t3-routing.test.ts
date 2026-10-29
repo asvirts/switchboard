@@ -38,6 +38,7 @@ test('maps primary agent judgments to the configured T3 worker model and effort'
     assert.equal(plan.delegation.mode, 'async');
     assert.equal(plan.delegation.isolation, 'shared');
     assert.match(plan.delegation.task, /Implement the edit\.\nRun relevant tests\./);
+    assert.match(plan.delegation.task, /^SWITCHBOARD_WORKER\n/);
     assert.equal(plan.verificationRequired, true);
   }
 });

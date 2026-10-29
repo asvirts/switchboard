@@ -28,6 +28,8 @@ const help = `Switchboard — automatic model and effort routing
 
 Usage:
   switchboard t3 init           (primary-led workers for this T3 project; no Jev)
+  switchboard t3 init --global  (enable across projects for T3 Codex and Claude)
+  switchboard t3 status --global | uninstall --global
   switchboard t3 instructions | policy
   switchboard t3 route          (JSON request on stdin; returns delegate_task arguments)
   switchboard init [--yes]

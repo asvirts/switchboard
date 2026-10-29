@@ -2,6 +2,8 @@
 
 ## Unreleased — Andrew Virts fork
 
+- Add global T3 setup, status, and removal for Codex and Claude instruction files,
+  with private backups and worker-scoped delegation guards.
 - Add primary-led T3 worker routing without a Jev dependency for T3 mode.
 - Add per-project setup, exact model selection, and escalation validation.
 - Move package and repository identity to `@asvirts/switchboard`.

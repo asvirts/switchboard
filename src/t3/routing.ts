@@ -49,7 +49,7 @@ function record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }
 
-const instructions = `\n\nWorker instructions: Complete only the bounded task above using the supplied context. Work independently; do not create or delegate to other workers. Preserve other people’s edits. Report findings, validation performed, and any blockers. Your result is not accepted until the primary agent verifies it.`;
+const instructions = `\n\nWorker instructions: Complete only the bounded task above using the supplied context. Work independently; do not create or delegate to other workers. Global and project Switchboard delegation workflows are inactive for this assignment. Preserve other people’s edits. Report findings, validation performed, and any blockers. Your result is not accepted until the primary agent verifies it.`;
 
 export function planT3Delegation(input: unknown, policy: T3Policy = defaultT3Policy) {
   const p = parseT3Policy(policy);
@@ -87,6 +87,6 @@ export function planT3Delegation(input: unknown, policy: T3Policy = defaultT3Pol
     options[optionId] = configuredEffort;
   }
   const selection = { providerInstanceId: providerId, model: modelId, options };
-  const task = `${request.task}${instructions}`;
+  const task = `SWITCHBOARD_WORKER\n\n${request.task}${instructions}`;
   return { tier, selection, delegation: { task, mode: 'async' as const, isolation: 'shared' as const, target: selection }, verificationRequired: true as const };
 }

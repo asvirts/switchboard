@@ -8,8 +8,17 @@ Switchboard helps your primary agent delegate work to an appropriate model in
 T3 Code. Keep talking to your chosen Codex or Claude model while it scopes
 subtasks, selects workers, checks their results, and escalates when needed.
 
-The goal is to use the smallest model likely to complete each task. Model
-selection is a judgment, and savings and result quality have not been measured.
+Every substantive task goes to at least one worker. The primary coordinates,
+verifies, and combines results; simple acknowledgments and logistics stay direct.
+It assigns independent work in parallel and dependent work in sequence, with
+clear ownership for each worker.
+
+The primary chooses a model tier and provider family for each task. It can use
+Codex or Claude workers, including a mix across tasks. For example, it might
+choose 10 Luna workers for independent routine tasks or 2 Sonnet workers when
+the work calls for that structure. Those counts are illustrative, not a measured
+efficiency comparison or fixed rule. Context duplication, coordination, and
+retries affect the tradeoffs; savings and result quality are not guaranteed.
 
 ## How it works
 
@@ -30,7 +39,7 @@ The default tiers are:
 
 T3 mode uses the primary agent's judgment, so it does not require Jev or a
 separate classifier key. It is opt-in and instruction-driven: the primary must
-follow the installed project instructions, and Switchboard does not intercept
+follow the installed instructions, and Switchboard does not intercept
 requests or run workers itself. T3 and the native harness own authentication,
 sandboxing, approvals, and worker execution.
 
@@ -46,18 +55,23 @@ npm ci
 npm run build
 ```
 
-From the project where you want worker routing, run the built checkout using its
-actual absolute path:
+To enable routing for T3 projects on this machine, run the built checkout using
+its actual absolute path:
 
 ```sh
-node /absolute/path/to/switchboard/bin/switchboard.mjs t3 init
+node /absolute/path/to/switchboard/bin/switchboard.mjs t3 init --global
 ```
 
-Start a new T3 conversation in that project. Setup adds a managed block to the
-project's `AGENTS.md` and creates a personal T3 policy if one does not already
-exist. Existing project instructions and policy are preserved. Keep the
-checkout in place and rebuild after source changes: the installed instructions
-reference its executable.
+Start a new T3 conversation in any project. Setup adds a short, T3-scoped pointer
+to your Codex and Claude user instruction files and creates a shared worker policy
+if needed. Existing instructions and policy are preserved. Project instructions
+and explicit requests can override the default. Keep the checkout in place and
+rebuild after source changes: the installed workflow references its executable.
+
+To enable routing only for one project instead, run the same command without
+`--global` from that project's directory. The [T3 guide](docs/t3.md) covers
+global status, removal, custom provider homes, and the limits of instruction-based
+worker safeguards.
 
 The upstream npm package does not include this fork's T3 workflow. See the
 [T3 guide](docs/t3.md) for policy configuration, routing details, and privacy.
@@ -73,9 +87,9 @@ npm run test:package
 ```
 
 The ordinary test suite uses synthetic providers and needs no AI keys. The
-package check may download public dependencies. Live model tests consume quota
-and require explicit authorization; the T3 workflow has not been validated with
-a live worker.
+package check may download public dependencies. Cost, quality, and provider
+coverage have not been benchmarked. Live model tests consume quota and require
+explicit authorization.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the source map and checks. The
 original classifier-based CLI routing remains available as a separate legacy

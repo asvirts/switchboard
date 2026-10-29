@@ -3,6 +3,7 @@ import { lstat, open, readFile, rename, rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { atomicJsonWrite } from '../storage.ts';
 import { defaultT3Policy, parseT3Policy, planT3Delegation } from './routing.ts';
+import { globalStatus, installGlobal, uninstallGlobal } from './global.ts';
 
 const start = '<!-- switchboard:t3:start -->';
 const end = '<!-- switchboard:t3:end -->';
@@ -13,20 +14,35 @@ export function t3Instructions(entry: string, root: string): string {
   return `${start}
 ## Switchboard worker routing for T3 Code
 
-Keep the user's selected primary model in charge of the conversation. Use it to
-understand the request and repository context, choose workers, and review results.
-Jev is not needed. Do trivial conversational replies yourself.
+Apply this workflow only in primary T3 sessions exposing orchestrator_capabilities
+and delegate_task. In a worker/child session or an assignment marked
+SWITCHBOARD_WORKER, complete your task yourself without launching workers.
+Outside T3 the workflow is inactive. Project instructions and explicit user
+choices take precedence. Apply this workflow once if both global and project
+instructions enable it.
+
+Keep the primary model stable and in charge of coordination, scoping, verification,
+and synthesis. Every substantive request (coding, research, analysis, or substantive
+answers) gets at least one worker; simple acknowledgments and logistics can stay
+direct. The primary may do minimal scoping and verification reads, but delegates
+substantive execution. Do not complete substantive work first and delegate afterward.
 
 For bounded delegated work:
 1. Call orchestrator_capabilities once per thread before the first delegate_task.
    Refresh only after an error or a user-named provider change. Use its current
    provider/model/options snapshot; do not invent availability or credentials.
-2. Choose the smallest sufficient tier: routine for mechanical work and bounded
+2. Before execution, decompose the work into dependency and ownership boundaries.
+   Choose the worker count, tier, and provider family for each subtask using the
+   live capability snapshot. Parallelize independent work and sequence dependent
+   work. Mix Codex and Claude workers when their available capabilities fit the
+   subtasks; there is no fixed worker count or default family match. Weigh useful
+   parallelism against duplicated context, coordination overhead, and expected
+   retries; savings are not guaranteed. Choose the smallest sufficient tier:
+   routine for mechanical work and bounded
    lookup; standard for familiar implementation with clear checks; complex for
    difficult debugging or broad review; demanding for unusually hard reasoning.
    Gather missing context before choosing. These are judgments, not guarantees.
-   Use family codex for a Codex primary, claude for a Claude primary. An explicit
-   user choice of worker model/provider/settings takes precedence over this policy.
+   Explicit user worker choices and project constraints take precedence.
 3. Send JSON on stdin to ${command}
    with {task, tier, family, capabilities}. The task must be self-contained: scope,
    relevant findings, file ownership, constraints, and concrete acceptance checks.
@@ -37,7 +53,8 @@ For bounded delegated work:
    Preserve the primary's native authentication, sandbox, approvals and settings.
    For an explicitly requested separate checkout use isolation worktree through T3;
    never create a child's checkout in a shell. Assign disjoint ownership to parallel
-   workers. Do not delegate merely to add overhead to a task already completed.
+   workers. Delegate every substantive subtask before execution; do not defer
+   delegation until after substantive work is complete.
 5. Follow the delegate's next instruction. An async delegate wakes this thread:
    end the turn instead of polling or sleeping. Questions and approvals remain
    pending until answered by an authorized party. Cancel replaced workers by
@@ -45,8 +62,8 @@ For bounded delegated work:
 6. Review the actual result and relevant checks. A worker's success claim is not
    verification. If capability is the blocker, reroute with a strictly higher tier
    and previous: {tier, model, failure}; include findings and failed checks in task.
-   Allow at most two escalations for a task. At the limit, handle it yourself or
-   report the blocker. Do not escalate permission failures or silently change a
+   Allow at most two escalations for a task. At the limit, report the blocker.
+   Do not escalate permission failures or silently change a
    requested model/provider. Unsupported routes require an explicit policy choice.
 
 Worker model pinning applies within each worker session. This workflow does not
@@ -101,10 +118,17 @@ async function installInstructions(file: string, block: string): Promise<void> {
 }
 
 export async function t3Command(root: string, args: string[]): Promise<number> {
-  if (args.length !== 1 || !['init', 'instructions', 'policy', 'route'].includes(args[0]!)) {
-    throw new Error('Usage: switchboard t3 <init|instructions|policy|route>');
+  const global = args.length === 2 && args[1] === '--global' && ['init', 'status', 'uninstall'].includes(args[0]!);
+  if (!global && (args.length !== 1 || !['init', 'instructions', 'policy', 'route'].includes(args[0]!))) {
+    throw new Error('Usage: switchboard t3 <init|instructions|policy|route> or t3 <init|status|uninstall> --global');
   }
   const command = args[0];
+  if (global && command === 'status') { console.log(JSON.stringify(await globalStatus(root), null, 2)); return 0; }
+  if (global && command === 'uninstall') {
+    await uninstallGlobal(root);
+    console.log('Removed global Switchboard instruction blocks. Other instructions, policy, workflow, and backups are preserved.');
+    return 0;
+  }
   if (command === 'instructions') {
     console.log(t3Instructions(process.argv[1]!, root));
     return 0;
@@ -112,6 +136,15 @@ export async function t3Command(root: string, args: string[]): Promise<number> {
   const current = await policy(root);
   if (command === 'policy') { console.log(JSON.stringify(current, null, 2)); return 0; }
   if (command === 'init') {
+    if (global) {
+      await installGlobal(root, t3Instructions(process.argv[1]!, root));
+      const file = join(root, 't3-policy.json');
+      try { await atomicJsonWrite(file, current, { replace: false }); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error; }
+      console.log(`Global T3 routing installed for Codex and Claude. Policy: ${file}`);
+      console.log('Start a new T3 conversation. Standalone sessions and delegated workers are excluded by the instructions.');
+      return 0;
+    }
     const file = join(root, 't3-policy.json');
     try { await atomicJsonWrite(file, current, { replace: false }); }
     catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error; }

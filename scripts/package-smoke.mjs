@@ -35,7 +35,7 @@ try {
   const [packed] = JSON.parse(npmRun(['pack', '--ignore-scripts', '--json', '--pack-destination', scratch], root));
   const archive = join(scratch, packed.filename);
   const files = new Set(packed.files.map(file => file.path));
-  for (const required of ['bin/switchboard.mjs', 'dist/cli.js', 'dist/index.js', 'dist/native/claude-hook.js', 'dist/t3/cli.js', 'dist/t3/routing.js', 'docs/t3.md', 'README.md', 'LICENSE', 'NOTICE', 'THIRD_PARTY_NOTICES.md']) {
+  for (const required of ['bin/switchboard.mjs', 'dist/cli.js', 'dist/index.js', 'dist/native/claude-hook.js', 'dist/t3/cli.js', 'dist/t3/routing.js', 'dist/t3/global.js', 'docs/t3.md', 'README.md', 'LICENSE', 'NOTICE', 'THIRD_PARTY_NOTICES.md']) {
     assert.ok(files.has(required), `Missing shipped file: ${required}`);
   }
   const publicFiles = new Set([
@@ -80,6 +80,13 @@ try {
   assert.ifError(routed.error);
   assert.equal(routed.status, 0, routed.stderr);
   assert.equal(JSON.parse(routed.stdout).delegation.target.model, 'gpt-6-luna');
+  assert.match(JSON.parse(routed.stdout).delegation.task, /^SWITCHBOARD_WORKER\n/);
+  run(installed, ['t3', 'init', '--global']);
+  assert.equal(JSON.parse(run(installed, ['t3', 'status', '--global'])).installed, true);
+  assert.ok((await readFile(join(env.HOME, '.codex', 'AGENTS.md'), 'utf8')).includes('t3-instructions.md'));
+  assert.ok((await readFile(join(env.HOME, '.claude', 'CLAUDE.md'), 'utf8')).includes('t3-instructions.md'));
+  run(installed, ['t3', 'uninstall', '--global']);
+  assert.equal(JSON.parse(run(installed, ['t3', 'status', '--global'])).installed, false);
 
   // npm exec is npx's execution engine. A separate working directory prevents
   // accidentally running the checkout's binary or resolving its dependencies.
