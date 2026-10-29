@@ -1,15 +1,16 @@
 import http from 'node:http';
 import https from 'node:https';
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import type { CacheUsage, Catalog, Classifier, Decision, Policy, Selection, Tool } from '../core/types.ts';
 import { Router } from '../core/session.ts';
 import { selectInitialRoute } from '../core/policy.ts';
 import { Store } from '../storage.ts';
 import { Ownership, OwnershipCollisionError } from './ownership.ts';
-import { applyRoute, claudeConversationSignature, claudeUserTextBlocks, hasPriorConversation, normalizeMatchText, parseNativeRequest, TOKEN_HEADER } from './protocol.ts';
+import { applyRoute, hasPriorConversation, parseNativeRequest, TOKEN_HEADER } from './protocol.ts';
 import { UsageParser, UsageStore } from './usage-store.ts';
 import { DecisionStream } from './decision-stream.ts';
+import { ClaudeTurnEvidence } from './turn-evidence.ts';
 
 export { AUTO_MODEL, TOKEN_ENV, TOKEN_HEADER } from './protocol.ts';
 
@@ -109,9 +110,6 @@ async function bodyOf(request: http.IncomingMessage, limit: number, signal: Abor
 }
 
 class SafeError extends Error { readonly status: number; constructor(status: number, message: string) { super(message); this.status = status; } }
-const digest = (value: string): string => createHash('sha256').update(value).digest('hex');
-type PromptHook = { promptId: string; prompt: string; digest: string };
-type ConsumedPrompt = Pick<PromptHook, 'promptId' | 'prompt'>;
 
 function jsonError(response: http.ServerResponse, status: number, message: string): void {
   if (response.headersSent) { response.destroy(); return; }
@@ -148,9 +146,7 @@ export async function startProxy(options: ProxyOptions): Promise<ProxyHandle> {
   const router = new Router({ policy: options.policy, catalog: options.catalog, repository, classify: options.classify });
   const ownership = new Ownership(options.root, randomUUID());
   const usageStore = new UsageStore(options.root);
-  const pendingHooks = new Map<string, PromptHook[]>();
-  const consumed = new Map<string, Map<string, ConsumedPrompt>>();
-  const sessionStarts = new Map<string, 'fresh' | 'resume'>();
+  const evidence = new ClaudeTurnEvidence(options.policy.classifier.maxContextChars);
   const active = new Set<AbortController>();
   const inFlight = new Set<Promise<void>>();
   const maxBodyBytes = options.maxBodyBytes ?? 16 * 1024 * 1024;
@@ -174,11 +170,7 @@ export async function startProxy(options: ProxyOptions): Promise<ProxyHandle> {
         try { hook = JSON.parse(raw.toString('utf8')) as Record<string, unknown>; } catch { throw new SafeError(400, 'Hook body must be valid JSON'); }
         if (!hook || Array.isArray(hook) || typeof hook.session_id !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,255}$/.test(hook.session_id)
           || typeof hook.source !== 'string' || !['startup', 'clear', 'resume', 'compact', 'fork'].includes(hook.source)) throw new SafeError(400, 'Session hook requires a bounded session_id and supported source');
-        if (!sessionStarts.has(hook.session_id) && sessionStarts.size >= 128) sessionStarts.delete(sessionStarts.keys().next().value!);
-        // Delayed/repeated lifecycle delivery cannot turn a resumed identity
-        // into a fresh conversation. /clear supplies a new session identity.
-        const resumed = sessionStarts.get(hook.session_id) === 'resume' || !['startup', 'clear'].includes(hook.source);
-        sessionStarts.set(hook.session_id, resumed ? 'resume' : 'fresh');
+        evidence.recordSession(hook.session_id, hook.source);
         response.writeHead(204); response.end(); return;
       }
       if (request.method === 'POST' && request.url === '/_router/turn') {
@@ -188,10 +180,7 @@ export async function startProxy(options: ProxyOptions): Promise<ProxyHandle> {
         if (!hook || Array.isArray(hook) || typeof hook.session_id !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,255}$/.test(hook.session_id)
           || typeof hook.prompt_id !== 'string' || !hook.prompt_id.trim() || hook.prompt_id.length > 256
           || typeof hook.prompt !== 'string' || !hook.prompt.trim()) throw new SafeError(400, 'Hook requires bounded session_id, prompt_id, and prompt');
-        if (!pendingHooks.has(hook.session_id) && pendingHooks.size >= 128) pendingHooks.delete(pendingHooks.keys().next().value!);
-        const events = pendingHooks.get(hook.session_id) ?? [];
-        if (!events.some(event => event.promptId === hook.prompt_id)) events.push({ promptId: hook.prompt_id, prompt: hook.prompt.slice(0, options.policy.classifier.maxContextChars + 1), digest: digest(normalizeMatchText(hook.prompt)) });
-        pendingHooks.set(hook.session_id, events.slice(-8));
+        evidence.recordPrompt(hook.session_id, hook.prompt_id, hook.prompt);
         response.writeHead(204); response.end(); return;
       }
       if (request.method === 'GET' && options.tool === 'codex' && new URL(request.url ?? '/', 'http://loopback').pathname === '/models') {
@@ -228,53 +217,32 @@ export async function startProxy(options: ProxyOptions): Promise<ProxyHandle> {
           routed = applyRoute(options.tool, request.url ?? '/', body, saved.selection);
           attributableConversation = routeConversationId;
         };
-        let matchedHook: PromptHook | undefined;
-        let previousPrompt: ConsumedPrompt | undefined;
-        let fingerprint = '';
+        let match: ReturnType<ClaudeTurnEvidence['match']> | undefined;
         if (options.tool === 'claude' && parsed.endpoint === 'messages'
           && (parsed.kind === 'user' || parsed.auxiliaryType === 'continuation')) {
-          fingerprint = digest(claudeConversationSignature(body.messages));
-          const candidates = new Set(claudeUserTextBlocks(body.messages).map(digest));
-          if (parsed.kind === 'user' && parsed.task) candidates.add(digest(normalizeMatchText(parsed.task)));
-          const matches = (pendingHooks.get(parsed.conversationId) ?? []).filter(event => candidates.has(event.digest));
-          matchedHook = matches.length === 1 ? matches[0] : undefined;
-          previousPrompt = matches.length === 0 ? consumed.get(parsed.conversationId)?.get(fingerprint) : undefined;
+          match = evidence.match(parsed.conversationId, body.messages, parsed.task, parsed.kind === 'user');
           // A single matching current event (or an already consumed retry) proves
           // the user turn despite sibling interruption text or tool results.
-          const match = matchedHook ?? previousPrompt;
-          if (match) { parsed.kind = 'user'; parsed.task = match.prompt; }
+          const prompt = evidence.matchedPrompt(match);
+          if (prompt !== undefined) { parsed.kind = 'user'; parsed.task = prompt; }
         }
         if (parsed.kind === 'unknown') {
           const input = options.tool === 'claude' ? body.messages : body.input;
           if (!Array.isArray(input) || input.length === 0) throw new SafeError(409, 'Unsupported automatic request shape; cannot apply the saved route');
           reuseSaved();
         } else if (parsed.kind === 'user') {
-          if (!saved && (hasPriorConversation(options.tool, body) || sessionStarts.get(parsed.conversationId) === 'resume')) {
+          if (!saved && (hasPriorConversation(options.tool, body) || evidence.isResumed(parsed.conversationId))) {
             throw new SafeError(409, 'Resumed conversation has no saved route; resume through the original router or start a new chat');
           }
           let task = parsed.task;
           let turnId = parsed.turnId;
           let turnDetection: Decision['turnDetection'] = 'native';
           if (options.tool === 'claude') {
-            const events = pendingHooks.get(parsed.conversationId) ?? [];
-            // Carry the event identity through: its bounded classifier prompt
-            // may be shorter than the full text used to establish the match.
-            const event = matchedHook;
-            if (event) events.splice(events.indexOf(event), 1);
-            if (!events.length) pendingHooks.delete(parsed.conversationId);
-            if (event) {
-              task = event.prompt; turnId = event.promptId;
-              turnDetection = 'hook';
-              if (!consumed.has(parsed.conversationId) && consumed.size >= 128) consumed.delete(consumed.keys().next().value!);
-              const turns = consumed.get(parsed.conversationId) ?? new Map();
-              turns.set(fingerprint, { promptId: event.promptId, prompt: event.prompt });
-              while (turns.size > 8) turns.delete(turns.keys().next().value!);
-              consumed.set(parsed.conversationId, turns);
-            } else if (previousPrompt) { task = previousPrompt.prompt; turnId = previousPrompt.promptId; turnDetection = 'hook'; }
-            else if (saved) reuseSaved();
-            else if (sessionStarts.get(parsed.conversationId) === 'fresh' && task.trim()) {
-              turnId = `content-${fingerprint}`; turnDetection = 'content';
-            } else throw new SafeError(409, 'Claude UserPromptSubmit hook data is missing and a fresh session cannot be confirmed; start a new chat through the router with hooks enabled');
+            const resolved = evidence.resolve(parsed.conversationId, match, task, !saved);
+            if (resolved.kind !== 'missing') {
+              task = resolved.task; turnId = resolved.turnId; turnDetection = resolved.kind;
+            } else if (saved) reuseSaved();
+            else throw new SafeError(409, 'Claude UserPromptSubmit hook data is missing and a fresh session cannot be confirmed; start a new chat through the router with hooks enabled');
           }
           if (!routed || routed === body) {
             if ((!turnId || !task) && saved) reuseSaved();

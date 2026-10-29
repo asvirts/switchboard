@@ -4,9 +4,11 @@ import { join, resolve } from 'node:path';
 import { atomicJsonWrite } from '../storage.ts';
 import { defaultT3Policy, parseT3Policy, planT3Delegation } from './routing.ts';
 import { globalStatus, installGlobal, uninstallGlobal } from './global.ts';
+import { updateManagedBlock } from './managed-instructions.ts';
 
 const start = '<!-- switchboard:t3:start -->';
 const end = '<!-- switchboard:t3:end -->';
+const markers = { start, end, malformedMessage: 'AGENTS.md has malformed Switchboard markers; fix them before setup' };
 const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
 
 export function t3Instructions(entry: string, root: string): string {
@@ -93,14 +95,7 @@ async function installInstructions(file: string, block: string): Promise<void> {
     original = await readFile(file, 'utf8');
     exists = true;
   } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
-  const starts = original.split(start).length - 1;
-  const ends = original.split(end).length - 1;
-  if (starts !== ends || starts > 1 || (starts && original.indexOf(end) < original.indexOf(start))) {
-    throw new Error('AGENTS.md has malformed Switchboard markers; fix them before setup');
-  }
-  const updated = starts
-    ? original.slice(0, original.indexOf(start)) + block + original.slice(original.indexOf(end) + end.length)
-    : original + (original && !original.endsWith('\n') ? '\n' : '') + (original ? '\n' : '') + block + '\n';
+  const updated = updateManagedBlock(original, block, markers);
   if (updated === original) return;
   const temporary = `${file}.${randomUUID()}.tmp`;
   try {

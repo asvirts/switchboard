@@ -84,10 +84,13 @@ test('setup replaces only a well-formed managed block and rejects malformed mark
   assert.match(updated, /^before\n/);
   assert.match(updated, /\nafter\n$/);
   assert.doesNotMatch(updated, /old managed text/);
-  const malformed = 'before\n<!-- switchboard:t3:start -->\nunclosed\n';
-  await writeFile(agents, malformed);
-  assert.equal(s.cli(['init']).status, 2);
-  assert.equal(await readFile(agents, 'utf8'), malformed);
+  const start = '<!-- switchboard:t3:start -->';
+  const end = '<!-- switchboard:t3:end -->';
+  for (const malformed of [`before\n${start}\nunclosed\n`, `${end}\n${start}`, `${start}\n${end}\n${start}\n${end}`]) {
+    await writeFile(agents, malformed);
+    assert.equal(s.cli(['init']).status, 2);
+    assert.equal(await readFile(agents, 'utf8'), malformed);
+  }
 });
 
 test('setup rejects a symlinked AGENTS.md without changing its target', async t => {

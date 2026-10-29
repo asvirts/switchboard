@@ -2,9 +2,11 @@ import { randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { lstat, mkdir, open, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { managedBlockBounds, updateManagedBlock } from './managed-instructions.ts';
 
 const start = '<!-- switchboard:t3:global:start -->';
 const end = '<!-- switchboard:t3:global:end -->';
+const markers = { start, end, malformedMessage: 'Malformed global Switchboard markers; repair the instruction file before setup' };
 interface Snapshot { file: string; content: string | null; mode: number }
 interface Change extends Snapshot { updated: string }
 
@@ -28,15 +30,6 @@ async function targets(): Promise<string[]> {
   return [join(codex, override ? 'AGENTS.override.md' : 'AGENTS.md'), join(claude, 'CLAUDE.md')];
 }
 
-function bounds(content: string): { from: number; to: number } | null {
-  const starts = content.split(start).length - 1;
-  const ends = content.split(end).length - 1;
-  if (starts !== ends || starts > 1 || (starts && content.indexOf(end) < content.indexOf(start))) {
-    throw new Error('Malformed global Switchboard markers; repair the instruction file before setup');
-  }
-  return starts ? { from: content.indexOf(start), to: content.indexOf(end) + end.length } : null;
-}
-
 function pointer(workflow: string): string {
   return `${start}
 ## Switchboard routing in T3 Code
@@ -49,13 +42,6 @@ In a delegated worker/child session, or an assignment marked SWITCHBOARD_WORKER,
 complete the assigned task yourself; this workflow is inactive and you must not
 launch workers. Outside T3, this block is inactive.
 ${end}`;
-}
-
-function update(content: string, block: string | null): string {
-  const section = bounds(content);
-  if (section) return content.slice(0, section.from) + (block ?? '') + content.slice(section.to);
-  if (block === null) return content;
-  return content + (content && !content.endsWith('\n') ? '\n' : '') + (content ? '\n' : '') + block + '\n';
 }
 
 async function unchanged(previous: Snapshot): Promise<void> {
@@ -134,7 +120,7 @@ export async function installGlobal(root: string, workflowContent: string): Prom
     const changes: Change[] = [];
     for (const file of files) {
       const previous = await snapshot(file);
-      changes.push({ ...previous, updated: update(previous.content ?? '', pointer(workflow)) });
+      changes.push({ ...previous, updated: updateManagedBlock(previous.content ?? '', pointer(workflow), markers) });
     }
     const previous = await snapshot(workflow);
     if (previous.content !== null && (!previous.content.startsWith('<!-- switchboard:t3:start -->') || !previous.content.trimEnd().endsWith('<!-- switchboard:t3:end -->'))) {
@@ -151,7 +137,7 @@ export async function uninstallGlobal(root: string): Promise<void> {
     const changes: Change[] = [];
     for (const file of await targets()) {
       const previous = await snapshot(file);
-      changes.push({ ...previous, updated: update(previous.content ?? '', null) });
+      changes.push({ ...previous, updated: updateManagedBlock(previous.content ?? '', null, markers) });
     }
     await commit(root, changes);
   });
@@ -162,7 +148,7 @@ export async function globalStatus(root: string) {
   const results = [];
   for (const file of await targets()) {
     const current = await snapshot(file);
-    const section = bounds(current.content ?? '');
+    const section = managedBlockBounds(current.content ?? '', markers);
     results.push({ file, installed: section !== null && current.content!.slice(section.from, section.to) === pointer(workflow) });
   }
   const saved = await snapshot(workflow);

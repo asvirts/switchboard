@@ -157,6 +157,19 @@ test('global setup preflights both instruction files before modifying either', a
   }
 });
 
+test('global setup and uninstall reject reversed or duplicate markers without changing either instruction file', async t => {
+  for (const malformed of [`${end}\n${start}`, `${start}\n${end}\n${start}\n${end}`]) {
+    const s = await sandbox(t);
+    const oldCodex = await readFile(s.codex, 'utf8');
+    await writeFile(s.claude, malformed);
+    for (const command of ['init', 'uninstall']) {
+      assert.equal(s.cli(command, '--global').status, 2);
+      assert.equal(await readFile(s.codex, 'utf8'), oldCodex);
+      assert.equal(await readFile(s.claude, 'utf8'), malformed);
+    }
+  }
+});
+
 test('global status reports missing workflow and invalid global flags fail', async t => {
   const s = await sandbox(t);
   assert.equal(s.cli('init', '--global').status, 0);
