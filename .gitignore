@@ -17,6 +17,3 @@ release/
 /.superpowers/
 /skills-lock.json
 /uat-scratch*/
-
-# Regenerable Motion Canvas renders
-/media/routing-animation/output/

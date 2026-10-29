@@ -22,10 +22,14 @@ import { readClaudeCodeVersion } from './native/claude-version.ts';
 import type { InteractiveContext } from './interactive.ts';
 import { describeChanges, effectivePolicy, getPath, parsePath, parseValue, readOverride, saveOverride, setPath, unsetPath } from './policy-edit.ts';
 import { PromptCancelled, interactive, terminalPrompter } from './prompts.ts';
+import { t3Command } from './t3/cli.ts';
 
 const help = `Switchboard — automatic model and effort routing
 
 Usage:
+  switchboard t3 init           (primary-led workers for this T3 project; no Jev)
+  switchboard t3 instructions | policy
+  switchboard t3 route          (JSON request on stdin; returns delegate_task arguments)
   switchboard init [--yes]
   switchboard config            (interactive settings menu)
   switchboard config show | check
@@ -337,6 +341,7 @@ export async function main(args: string[]): Promise<number> {
     if (!args.length || (args.length === 1 && ['--help', '-h', 'help'].includes(args[0]!))) { console.log(help); return 0; }
     const [command, ...rest] = args;
     const root = stateDirectory();
+    if (command === 't3') return await t3Command(root, rest);
     if (command === 'claude' || command === 'codex') return await launch(root, command, rest);
     if (command === 'init') return await init(root, rest);
     if (command === 'doctor' && (!rest.length || (rest.length === 1 && rest[0] === '--fix'))) return await doctor(root, rest[0] === '--fix');

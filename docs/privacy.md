@@ -1,5 +1,12 @@
 # Privacy and data flow
 
+The fork also provides opt-in [T3 worker routing](t3.md). That command reads a
+task from stdin and returns a delegation plan; it does not itself contact a
+classifier or model, store the task, or execute the worker. The task appears in
+the returned plan and may be sent to the selected worker by the primary through
+T3. T3 and the native harness may retain their own transcript and logs. The
+existing proxy workflow below has separate data flows.
+
 Switchboard runs a local routing proxy. It has no Switchboard account, analytics
 endpoint, or hosted service receiving prompts. Its source is licensed under
 Apache-2.0 so you can inspect the routing and forwarding behavior yourself.

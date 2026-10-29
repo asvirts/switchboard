@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — Andrew Virts fork
+
+- Add primary-led T3 worker routing without a Jev dependency for T3 mode.
+- Add per-project setup, exact model selection, and escalation validation.
+- Move package and repository identity to `@asvirts/switchboard`.
+- Make documentation T3-first and remove obsolete upstream demos and funding links.
+- Retain legacy CLI routing and upstream attribution.
+
+## Upstream release history
+
 ## 0.2.0
 
 ### Routing

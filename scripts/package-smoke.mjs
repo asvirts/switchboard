@@ -35,14 +35,14 @@ try {
   const [packed] = JSON.parse(npmRun(['pack', '--ignore-scripts', '--json', '--pack-destination', scratch], root));
   const archive = join(scratch, packed.filename);
   const files = new Set(packed.files.map(file => file.path));
-  for (const required of ['bin/switchboard.mjs', 'dist/cli.js', 'dist/index.js', 'dist/native/claude-hook.js', 'README.md', 'LICENSE', 'NOTICE', 'THIRD_PARTY_NOTICES.md']) {
+  for (const required of ['bin/switchboard.mjs', 'dist/cli.js', 'dist/index.js', 'dist/native/claude-hook.js', 'dist/t3/cli.js', 'dist/t3/routing.js', 'docs/t3.md', 'README.md', 'LICENSE', 'NOTICE', 'THIRD_PARTY_NOTICES.md']) {
     assert.ok(files.has(required), `Missing shipped file: ${required}`);
   }
   const publicFiles = new Set([
     'package.json', 'bin/switchboard.mjs', 'README.md', 'LICENSE', 'NOTICE',
     'THIRD_PARTY_NOTICES.md', 'CONTRIBUTING.md', 'SECURITY.md', 'CHANGELOG.md',
     'docs/routing.md', 'docs/customization.md', 'docs/privacy.md', 'docs/native-cli.md', 'docs/model-catalog.md',
-    'docs/classifiers.md', 'docs/distribution.md',
+    'docs/classifiers.md', 'docs/distribution.md', 'docs/t3.md',
   ]);
   for (const file of files) {
     assert.ok(publicFiles.has(file) || /^dist\/(?:[a-z0-9-]+\/)*[a-z0-9-]+\.(?:js|d\.ts)$/.test(file),
@@ -65,6 +65,21 @@ try {
   run(installed, ['init', '--yes']);
   run(installed, ['config', 'check']);
   const globalPolicy = JSON.parse(run(installed, ['config', 'show']));
+  const workerPolicy = JSON.parse(run(installed, ['t3', 'policy']));
+  assert.equal(workerPolicy.routing.codex.routine.model, 'gpt-6-luna');
+  run(installed, ['t3', 'init']);
+  const instructions = await readFile(join(scratch, 'AGENTS.md'), 'utf8');
+  assert.ok(instructions.includes(installed), 'Project instructions must use the installed executable.');
+  const routed = spawnSync(installed, ['t3', 'route'], {
+    cwd: scratch, env, encoding: 'utf8', timeout: 10_000,
+    input: JSON.stringify({ task: 'Explain a synthetic fixture', tier: 'routine', family: 'codex', capabilities: {
+      inheritedProviderInstanceId: 'codex', providers: [{ providerInstanceId: 'codex', driverKind: 'codex',
+        canRunChildTask: true, models: [{ id: 'gpt-6-luna', options: [{ id: 'reasoningEffort', values: ['low'] }] }] }],
+    } }),
+  });
+  assert.ifError(routed.error);
+  assert.equal(routed.status, 0, routed.stderr);
+  assert.equal(JSON.parse(routed.stdout).delegation.target.model, 'gpt-6-luna');
 
   // npm exec is npx's execution engine. A separate working directory prevents
   // accidentally running the checkout's binary or resolving its dependencies.
@@ -74,7 +89,7 @@ try {
   npmRun([...execArgs, 'init', '--yes']);
   npmRun([...execArgs, 'config', 'check']);
   assert.deepEqual(JSON.parse(npmRun([...execArgs, 'config', 'show'])), globalPolicy);
-  console.log('Package smoke passed: isolated npm global install and npx execution, init, and policy checks.');
+  console.log('Package smoke passed: isolated npm global install and npx execution, init, policy, and T3 planning checks.');
 } finally {
   await rm(scratch, { recursive: true, force: true });
 }

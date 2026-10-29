@@ -16,3 +16,5 @@ export { UsageStore } from './native/usage-store.ts';
 export { nativeBypassesRouting, prepareNativeLaunch, runPreparedNative, validateNativeAutomatic } from './native/launcher.ts';
 export type { NativeProxyDetails, PrepareNativeLaunchOptions, PreparedNativeLaunch, NativeRunnerDependencies } from './native/launcher.ts';
 export { explainDecision } from './core/explanation.ts';
+export { defaultT3Policy, parseT3Policy, planT3Delegation } from './t3/routing.ts';
+export type { T3Policy } from './t3/routing.ts';

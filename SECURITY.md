@@ -1,16 +1,15 @@
 # Security
 
-Security fixes are provided for the latest published release only. Older
-versions do not receive backports; update to the latest release to receive
-fixes. Before the first publication, fixes target the current source branch.
+Security fixes target the current source branch. This fork has not established
+a published release or backport policy.
 
 ## Report a vulnerability
 
-Use **Report a vulnerability** on
-[ruban-24/switchboard's Security page](https://github.com/ruban-24/switchboard/security)
-to send a private report. If that option is unavailable, open an issue requesting
-a private contact channel without including exploit details, keys, or private
-data. There is no guaranteed response or resolution time.
+If private reporting is enabled, use **Report a vulnerability** on
+[the fork's Security page](https://github.com/asvirts/switchboard/security).
+Otherwise, open an issue requesting a private contact channel without including
+exploit details, keys, or private data. There is no guaranteed response or
+resolution time.
 
 Include affected versions, a minimal synthetic reproduction, and the impact.
 Do not post API keys, OAuth links, native credentials, full transcripts, or
@@ -18,10 +17,16 @@ private repository content in public issues.
 
 ## Data handling
 
-The local proxy forwards native inference to the tool's provider. Extracted task
-text is also sent to the selected Jev provider for classification, even when
-local raw-prompt capture is disabled. Native CLI transcripts and provider data
-retention are separate from Switchboard's local history settings.
+T3 routing reads a task from stdin and returns it in a worker delegation plan.
+Switchboard does not persist the task or call a classifier or model in this
+mode, but T3 and the native harness may retain transcripts and send the task to
+the selected provider.
+
+In the retained legacy mode, the local proxy forwards native inference to the
+tool's provider. Extracted task text is also sent to the selected Jev provider
+for classification, even when local raw-prompt capture is disabled. Native CLI
+transcripts and provider data retention are separate from Switchboard's local
+history settings.
 
 Interactive `switchboard init` saves classifier credentials in `connection.json`
 beside the personal policy, with owner-only read/write permissions. The key is

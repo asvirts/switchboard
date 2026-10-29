@@ -1,8 +1,8 @@
 {
-  "name": "@ruban24/switchboard",
+  "name": "@asvirts/switchboard",
   "version": "0.2.0",
   "private": false,
-  "description": "Model and effort routing for coding agents, with Jev support",
+  "description": "Primary-led worker model routing for T3 Code, with Claude Code and Codex CLI support",
   "type": "module",
   "engines": {
     "node": ">=22.18.0"
@@ -17,6 +17,7 @@
     "bin/switchboard.mjs",
     "dist",
     "docs/routing.md",
+    "docs/t3.md",
     "docs/customization.md",
     "docs/privacy.md",
     "docs/native-cli.md",
@@ -53,22 +54,20 @@
     "smol-toml": "^1.8.0"
   },
   "license": "Apache-2.0",
-  "author": "Ruban",
-  "homepage": "https://github.com/ruban-24/switchboard",
+  "author": "Andrew Virts",
+  "homepage": "https://github.com/asvirts/switchboard",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ruban-24/switchboard.git"
+    "url": "git+https://github.com/asvirts/switchboard.git"
   },
   "bugs": {
-    "url": "https://github.com/ruban-24/switchboard/issues"
+    "url": "https://github.com/asvirts/switchboard/issues"
   },
   "keywords": [
     "switchboard",
-    "jev",
-    "system-one",
-    "model-router",
+    "t3-code",
     "model-routing",
-    "ai-model-router",
+    "agent-orchestration",
     "claude-code",
     "codex",
     "reasoning-effort",
@@ -80,5 +79,11 @@
   "os": [
     "darwin",
     "linux"
+  ],
+  "contributors": [
+    {
+      "name": "Ruban",
+      "url": "https://github.com/ruban-24/switchboard"
+    }
   ]
 }

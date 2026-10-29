@@ -1,5 +1,9 @@
 # Routing and personal policy
 
+This guide documents the legacy proxy-based router, which selects one model
+for a conversation. For the fork's primary-led T3 worker mode, see
+[T3 worker setup](t3.md).
+
 Switchboard uses Jev to assess task meaning and reasoning demand, then applies
 a deterministic personal policy. This reference describes the shipped behavior.
 

@@ -1,17 +1,13 @@
 {
-  "name": "Ruban review for contributor PRs",
+  "name": "Code-owner review for contributor PRs",
   "target": "branch",
   "enforcement": "active",
-  "bypass_actors": [
-    {
-      "actor_id": 167326848,
-      "actor_type": "User",
-      "bypass_mode": "pull_request"
-    }
-  ],
+  "bypass_actors": [],
   "conditions": {
     "ref_name": {
-      "include": ["refs/heads/main"],
+      "include": [
+        "refs/heads/main"
+      ],
       "exclude": []
     }
   },

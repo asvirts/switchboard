@@ -7,3 +7,8 @@ Switchboard is licensed under the Apache License, Version 2.0.
 See THIRD_PARTY_NOTICES.md for dependency and font notices.
 
 This notice is informational and does not modify the license terms.
+
+Fork maintained by Andrew Virts: https://github.com/asvirts/switchboard
+Copyright 2026 Andrew Virts for modifications.
+This fork adds primary-led T3 worker routing and updates project identity,
+setup documentation, and repository maintenance configuration.
