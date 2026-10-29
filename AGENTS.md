@@ -29,6 +29,6 @@ checks; obtain explicit authorization before paid live tests.
 
 Keep changes focused and update affected user documentation.
 Never commit credentials, private transcripts, local agent directories, planning
-files, or generated build/render output. `.env.example` is the shared template.
+files, or generated build/render output.
 Describe what changed and what was verified in the PR; preserve third-party notices.
 Do not publish packages, release tags, or tap updates without explicit authorization.
